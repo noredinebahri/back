@@ -1,0 +1,18 @@
+
+# Dependency directories
+node_modules/
+params/
+params/db.js
+# dotenv environment variables file
+.env
+.env.dev
+.env.prod
+combined.log
+send.js
+session.json
+error.log
+combined.log
+.wwebjs_auth
+.wwebjs_cache
+model.nlp
+params/db.js

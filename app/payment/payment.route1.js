@@ -1,0 +1,20 @@
+const router = require("express").Router();
+const paymenttCtl = require("./payment.controller");
+router.post('/save', paymenttCtl.payment);
+router.post('/quickPay', paymenttCtl.quickPay);
+router.get('/list/:month/:year', paymenttCtl.paymentList);
+router.post('/totalSupportOnly', paymenttCtl.totalSupportOnly);
+router.get('/sumOfEachLevel', paymenttCtl.sumOfEachLevel);
+router.get('/sumOfOxygenLevel', paymenttCtl.sumOfOxygenLevel);
+router.get('/paymentsEvolution', paymenttCtl.paymentsEvolution);
+router.get('/paymentsEvolutionByRange', paymenttCtl.paymentsEvolutionByRange);
+router.post('/listNotPaid', paymenttCtl.getStudentsNotPaidThisMonth);
+router.post('/getUnpaidStudents', paymenttCtl.getUnpaidStudents);
+router.get('/listWillPaid/:month/:year', paymenttCtl.getStudentsThisMonth);
+router.get('/rightNow', paymenttCtl.getSumOfPaymentsForCurrentMonth);
+router.delete('/paymentDelete/:id', paymenttCtl.paymentDelete);
+router.get('/unpaidStudents/:year/:month', paymenttCtl.unpaidStudents);
+router.post('/sumMonth', paymenttCtl.sumMonth);
+router.post('/studentPaidMonth', paymenttCtl.studentPaidMonth);
+router.post('/studentNotPaidMonth', paymenttCtl.studentNotPaidMonth);
+module.exports = router
