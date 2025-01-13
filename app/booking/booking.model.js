@@ -124,6 +124,42 @@ Airport.init({
   modelName: 'Airport',
   tableName: 'Airports'
 });
+class City extends Model {}
+City.init({
+  city_id: {
+    type: DataTypes.STRING(255),
+    primaryKey: true,
+    allowNull: false
+  },
+  city_name: {
+    type: DataTypes.STRING(100),
+    allowNull: false
+  },
+  region: {
+    type: DataTypes.STRING(100),
+    allowNull: true
+  },
+  population: {
+    type: DataTypes.INTEGER,
+    allowNull: true
+  },
+  latitude: {
+    type: DataTypes.DECIMAL(10, 8),
+    allowNull: false
+  },
+  longitude: {
+    type: DataTypes.DECIMAL(11, 8),
+    allowNull: false
+  },
+  is_active: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: true
+  }
+}, {
+  sequelize,
+  modelName: 'City',
+  tableName: 'cities'
+});
 
 // Vehicles Model
 class Vehicle extends Model {}
@@ -506,5 +542,6 @@ module.exports = {
   RideBooking,
   Payment,
   DriverRating,
-  PricingRule
+  PricingRule,
+  City
 };

@@ -1,7 +1,14 @@
-const bookingRoute = require("express").Router();
-const bookingCtrl = require("./booking.ctrl");
-const bookingmdllw = require("./booking.middlware");
-bookingRoute.get('/rides', bookingCtrl.getRideBooking);
-bookingRoute.post('/ride', bookingCtrl.createRideBooking);
+const bookingRoute = require('express').Router();
+const bookingCtrl = require('./booking.ctrl');
+
+// Nouvelle route pour récupérer les aéroports
+bookingRoute.get('/airports', bookingCtrl.getMoroccanAirports);
+
+// Nouvelle route pour récupérer les villes d'un aéroport
+bookingRoute.get('/cities/:airportId', bookingCtrl.getCitiesByAirport);
+
+// Nouvelle route pour récupérer les lieux dans une ville
+bookingRoute.get('/cities', bookingCtrl.getPlacesByCity);
+bookingRoute.post('/calculate', bookingCtrl.calculatePrice);
 
 module.exports = bookingRoute;

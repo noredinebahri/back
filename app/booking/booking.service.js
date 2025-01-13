@@ -27,4 +27,12 @@ async function addRide(newRide) {
        throw new Error('Failed to create ride booking.');
      }
    }
-module.exports = { getAllRides, addRide, getActiveRideByUserId };
+   async function calculateRide(from, to) {
+    try {
+      const infoCalcule = await bookingRepository.calculateDistance2(from, to);
+      return infoCalcule;
+    } catch (error) {
+      
+    }
+   }
+module.exports = { getAllRides, addRide, getActiveRideByUserId, calculateRide };
