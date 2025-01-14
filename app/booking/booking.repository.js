@@ -24,13 +24,25 @@ async function calculateDistance2(originAirportId, destinationCityId, passengers
     console.log(`Distance calculée : ${distanceEnKm} km`);
 
     // Calcul du prix
-    const basePrice = 30;               // Prix de base
-    const pricePerKm = 5;              // Prix par kilomètre
-    const passengerFee = passengers * 2;  // Frais par passager
-    const luggageFee = luggage * 3;      // Frais par bagage
-
+    let basePrice = 30;               // Prix de base
+    let pricePerKm = 6;              // Prix par kilomètre
+    let passengerFee = 0;  // Frais par passager
+    let luggageFee = 0;      // Frais par bagage
+    switch (passengers) {
+      case passengers === 1:
+        passengerFee = 10;
+        break;
+      case passengers < 3 && passengers > 1:
+        passengerFee = 50;
+        break;
+      case passengers < 5 && passengers > 3:
+        passengerFee = 100;
+        break;
+      default:
+        passengerFee = 150;
+    }
     const totalPrice = basePrice + (distanceEnKm * pricePerKm) + passengerFee + luggageFee;
-
+    console.log(totalPrice);
     return { distance: distanceEnKm.toFixed(2), price: totalPrice.toFixed(2) };
   } catch (error) {
     console.error('Erreur lors du calcul de la distance:', error);
