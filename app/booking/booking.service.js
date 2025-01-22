@@ -1,5 +1,6 @@
 const bookingRepository = require('./booking.repository');
-
+const { spawn } = require('child_process');
+const path = require('path');
 async function getAllRides() {
     try {
         const rides = await bookingRepository.getAllRidesFromDb();
@@ -35,4 +36,17 @@ async function addRide(newRide) {
       
     }
    }
-module.exports = { getAllRides, addRide, getActiveRideByUserId, calculateRide };
+   function generateResponse(prompt) {
+    return new Promise((resolve, reject) => {
+      const pythonProcess = spawn('python3', [path.join(__dirname, 'gpt_integration.py'), prompt]);
+  
+      pythonProcess.stdout.on('data', (data) => {
+        resolve(data.toString());
+      });
+  
+      pythonProcess.stderr.on('data', (data) => {
+        reject(`Erreur : ${data}`);
+      });
+    });
+  }
+module.exports = { getAllRides, addRide, getActiveRideByUserId, calculateRide, generateResponse };

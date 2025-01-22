@@ -1,12 +1,28 @@
 const bookingService = require('./booking.service');
 const bookingRepository = require('./booking.repository');
 const {Airport, City} = require("./booking.model");
+const { generateResponse } = require("./gptService");
+const flightdata = require('flight-data');
+const axios = require('axios');
+
 async function getRideBooking(req, res) {
     try {
         const rides = await bookingService.getAllRides();
         res.status(200).json({payload: rides, sucess: true});
     } catch (error) {
         res.status(500).json({ error: error.message || 'Failed to retrieve rides.', success: false }); // Send a 500 error
+    }
+}
+exports.generate = async (req, res) => {
+  const { prompt } = req.body;
+    try {
+        console.log("Prompt reçu :", prompt);
+        const response = await bookingService.generateResponse(prompt);
+        console.log("Réponse générée :", response);
+        res.status(200).json({ response });
+    } catch (error) {
+        console.error("Erreur :", error);
+        res.status(500).json({ error: error.message });
     }
 }
 exports.getMoroccanAirports = async (req, res) => {
@@ -63,15 +79,41 @@ async function createRideBooking(req, res) {
        res.status(500).json({ error: error.message || 'Failed to create ride booking.' });
      }
    }
-   exports.calculatePrice = async (req, res) => {
-    const { airportId, cityId, passengers, luggage } = req.body;
-    console.log(req.body);
+
+   async function getFlightByIataAndNumber(flight_number, airline_iata) {
     try {
-      const result = await bookingRepository.calculateDistance2(airportId, cityId, passengers, luggage);
-      res.status(200).json({ distance: result.distance, price: result.price });
+      const response = await axios.get('http://api.aviationstack.com/v1/flights', {
+        params: {
+          access_key: '557bc3ccce80ec0a9d7d67616f766b44',
+          flight_number,
+          airline_iata,
+          limit: 2
+        }
+      });
+      return response.data;
     } catch (error) {
-      console.error('Erreur lors du calcul du prix :', error);
-      res.status(500).json({ error: 'Erreur lors du calcul du prix' });
+      console.error('Error fetching flight data:', error);
+      throw error;
+    }
+  }
+  
+  exports.calculatePrice = async (req, res) => {
+    const { airportId, cityId, passengers, luggage } = req.body;
+    // console.log(req.body);
+    try {
+      // Check if flight number exists
+      // const flightData = await getFlightByIataAndNumber(flight_number, arr_iata);
+      // if (flightData && flightData.data && flightData.data.length > 0) {
+        // console.log('flight: ', flightData);
+        // Proceed with calculating distance and price
+        const result = await bookingRepository.calculateDistance2(airportId, cityId, passengers, luggage);
+        res.status(200).json({ distance: result.distance, price: result.price });
+      // } else {
+        // res.status(404).json({ message: 'Flight data not found' });
+      // }
+    } catch (error) {
+      console.error('Error calculating price:', error);
+      res.status(500).json({ message: 'Internal server error' });
     }
   };
 // module.exports = { getRideBooking, createRideBooking };
