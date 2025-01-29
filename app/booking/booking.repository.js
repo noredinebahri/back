@@ -1,5 +1,23 @@
 const axios = require('axios');
 const {Airport, City} = require("./booking.model");
+const stripe = require('stripe')('sk_test_51KYsoWLQSEoYz0V0ow1U9RzuRpyvtFzcbDy7I64Vpu1Y5jXk67kYGg94HZ6La5xnjvIXymd1UgYVWVk0Pu1BgGsq00pJ9PFR0D');
+
+async function createCheckoutSession(priceId) {
+  const session = await stripe.checkout.sessions.create({
+    payment_method_types: ['card'],
+    line_items: [
+      {
+        price: priceId,
+        quantity: 1,
+      },
+    ],
+    mode: 'payment',
+    success_url: 'http://localhost:4200/success.html',
+    cancel_url: 'http://localhost:4200/cancel.html',
+  });
+
+  return session;
+}
 
 // Modification de la méthode pour inclure le calcul du prix
 async function calculateDistance2(originAirportId, destinationCityId, passengers, luggage) {
@@ -24,25 +42,24 @@ async function calculateDistance2(originAirportId, destinationCityId, passengers
     console.log(`Distance calculée : ${distanceEnKm} km`);
 
     // Calcul du prix
-    const basePrice = 30;               // Prix de base
-    const pricePerKm = 6.1;              // Prix par kilomètre
-    let passengerFee = 0;  // Frais par passager
-    const luggageFee = 10;      // Frais par bagage
+    const basePrice = 3;              
+    const pricePerKm = 6.1; 
+    let passengerFee = 0; 
+    const luggageFee = 1; 
     switch (passengers) {
       case passengers === 1:
-        passengerFee = 10;
+        passengerFee = 1;
         break;
       case passengers < 3 && passengers > 1:
-        passengerFee = 15;
+        passengerFee = 1.5;
         break;
       case passengers < 5 && passengers > 3:
-        passengerFee = 20;
+        passengerFee = 2;
         break;
       default:
-        passengerFee = 13;
+        passengerFee = 1.3;
     }
-    const totalPrice = basePrice + (distanceEnKm * pricePerKm) + passengerFee + luggageFee;
-    // console.log(totalPrice);
+    const totalPrice = (basePrice + (distanceEnKm * pricePerKm) + passengerFee + luggageFee)/10;
     return { distance: distanceEnKm.toFixed(2), price: totalPrice.toFixed(2) };
   } catch (error) {
     console.error('Erreur lors du calcul de la distance:', error);

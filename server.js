@@ -7,12 +7,12 @@ const bodyParser = require("body-parser");
 app.use(bodyParser.json());
 app.use(cors());
 const PORT = process.env.PORT;
-const HOST = process.env.HOST;
+const HOST = process.env.HOST2;
 const VERSION = process.env.VERSION;
 const URL = `http://${HOST}:${PORT}`;
 
 // routes
 app.use(`/api/${VERSION}/booking`, bookingRoute);
-app.listen(3000, () => {
+app.listen(PORT,HOST, () => {
     console.info(`${process.env.NODE_ENV}  | server connected at :${URL}`);
 });

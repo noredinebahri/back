@@ -12,5 +12,9 @@ bookingRoute.get('/cities', bookingCtrl.getPlacesByCity);
 bookingRoute.post('/calculate', bookingCtrl.calculatePrice);
 // bookingRoute.post('/flight', bookingCtrl.getFlightByIataAndNumber);
 bookingRoute.post('/generate', bookingCtrl.generate);
+// checkout session stripe
+bookingRoute.post('/create-checkout-session', bookingCtrl.checkoutSession);
 
+bookingRoute.get('/session-status', bookingCtrl.sessionStatus);
+bookingRoute.post('/convertCurrency', bookingCtrl.convertCurrency);
 module.exports = bookingRoute;
