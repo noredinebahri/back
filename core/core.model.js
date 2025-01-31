@@ -1,7 +1,7 @@
 // database.js
 const { Sequelize } = require('sequelize');
 const { 
-  User, 
+
   Airport, 
   Vehicle, 
   RideBooking, 
@@ -9,7 +9,7 @@ const {
   DriverRating, 
   PricingRule 
 } = require("../app/booking/booking.model"); // Adjust the path to where you saved the models
-
+const Customers = require("../app/user/auth/auth.model");
 async function initializeDatabase() {
   try {
     // Option 1: Sync all models (Safe for development)
@@ -19,13 +19,15 @@ async function initializeDatabase() {
     // });
 
     // Option 2: More controlled synchronization
-    await User.sync();
     await Airport.sync();
     await Vehicle.sync();
     await RideBooking.sync();
     await Payment.sync();
     await DriverRating.sync();
     await PricingRule.sync();
+    await Customers.sync().then(() => {
+      console.log('Customers table created successfully');
+    } );
 
     console.log('Database tables created successfully');
   } catch (error) {

@@ -1,78 +1,68 @@
-const { Sequelize } = require("sequelize");
-const db = require("../../../params/db");
+const sequelize = require("../../../params/db");
+const { DataTypes, Model, Sequelize } = require("sequelize");
+const bcrypt = require("bcrypt");
 
-const User = db.define(
-    "user",
-    {
-        id: {
-            type: Sequelize.INTEGER,
-            autoIncrement: true,
-            allowNull: false,
-            primaryKey: true,
-        },
-        firstname: {
-            type: Sequelize.STRING,
-            allowNull: false,
-        },
-        lastname: {
-            type: Sequelize.STRING,
-            allowNull: false,
-        },
-        emailsec: {
-            type: Sequelize.STRING,
-            allowNull: false,
-        },
-        email: {
-            type: Sequelize.STRING,
-            allowNull: true,
-        },
-        role: {
-            type: Sequelize.STRING,
-            allowNull: true,
-        },
-        
-        phone: {
-            type: Sequelize.STRING,
-            allowNull: true,
-        },
-        private_token: {
-            type: Sequelize.STRING(1500),
-            allowNull: true,
-        },
-        actif: {
-            type: Sequelize.INTEGER,
-            allowNull: false,
-            defaultValue: 0,
-        },
-        rejected: {
-            type: Sequelize.INTEGER,
-            allowNull: false,
-            defaultValue:0,
-        },
-        function: {
-            type: Sequelize.STRING,
-            allowNull: false,
-            defaultValue: 'prof'
-        },
-        priceHour: {
-            type: Sequelize.INTEGER,
-            allowNull: false,
-            defaultValue:0,
-        },
-        priceMonth: {
-            type: Sequelize.INTEGER,
-            allowNull: false,
-            defaultValue:0,
-        },
-        password: {
-            type: Sequelize.STRING,
-            allowNull: false
-        }
+class Customers extends Model {
+  async validPassword(password) {
+    return await bcrypt.compare(password, this.password_hash);
+  }
+}
+
+Customers.init(
+  {
+    user_id: {
+      type: DataTypes.UUID,
+      defaultValue: DataTypes.UUIDV4,
+      primaryKey: true,
     },
-    {
-        charset: "utf8",
-        collate: "utf8_general_ci",
-    }
+    first_name: {
+      type: DataTypes.STRING(100),
+      allowNull: false,
+    },
+    last_name: {
+      type: DataTypes.STRING(100),
+      allowNull: false,
+    },
+    email: {
+      type: DataTypes.STRING(255),
+      allowNull: false,
+      unique: true,
+      validate: { isEmail: true },
+    },
+    password_hash: {
+      type: DataTypes.STRING(255),
+      allowNull: false,
+    },
+    currency: {
+      type: DataTypes.STRING(3), // USD, EUR, etc.
+      allowNull: false,
+      defaultValue: "USD",
+    },
+    language: {
+      type: DataTypes.STRING(10), // fr, en, ar...
+      allowNull: false,
+      defaultValue: "en",
+    },
+    user_type: {
+      type: DataTypes.ENUM("CUSTOMER", "ADMIN", "DRIVER", "MERCHANT", "AGENT", "GUEST", "SUPER_ADMIN", "MANAGER", "EMPLOYEE"),
+      defaultValue: "CUSTOMER",
+      allowNull: false,
+    },
+    is_verified: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: false,
+    },
+  },
+  {
+    sequelize,
+    modelName: "Customers",
+    tableName: "customers",
+    hooks: {
+      beforeCreate: async (user) => {
+        user.password_hash = await bcrypt.hash(user.password_hash, 10);
+      },
+    },
+  }
 );
 
-module.exports = User;
+module.exports = Customers;
