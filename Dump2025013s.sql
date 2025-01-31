@@ -81,6 +81,40 @@ INSERT INTO `cities` VALUES ('6bdac365-d123-11ef-9a26-00090ffe0001','Casablanca'
 UNLOCK TABLES;
 
 --
+-- Table structure for table `customers`
+--
+
+DROP TABLE IF EXISTS `customers`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `customers` (
+  `user_id` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
+  `first_name` varchar(100) NOT NULL,
+  `last_name` varchar(100) NOT NULL,
+  `email` varchar(255) NOT NULL,
+  `password_hash` varchar(255) NOT NULL,
+  `currency` varchar(3) NOT NULL DEFAULT 'USD',
+  `language` varchar(10) NOT NULL DEFAULT 'en',
+  `user_type` enum('CUSTOMER','ADMIN','DRIVER','MERCHANT','AGENT','GUEST','SUPER_ADMIN','MANAGER','EMPLOYEE') NOT NULL DEFAULT 'CUSTOMER',
+  `is_verified` tinyint(1) DEFAULT '0',
+  `createdAt` datetime NOT NULL,
+  `updatedAt` datetime NOT NULL,
+  PRIMARY KEY (`user_id`),
+  UNIQUE KEY `email` (`email`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `customers`
+--
+
+LOCK TABLES `customers` WRITE;
+/*!40000 ALTER TABLE `customers` DISABLE KEYS */;
+INSERT INTO `customers` VALUES ('7d677cdc-309e-47f9-becd-d7453efe428d','noredine','bahri','barito@gmail.com','$2b$10$EnG7zzn2PCit9p3YDXuJ2e9WjKsJwWxfygWrbUID4avJP7byZ6wai','EUR','en','CUSTOMER',1,'2025-01-30 20:44:38','2025-01-30 20:44:45'),('98a965f3-81b6-4629-a2dd-3b624bc29efe','mohammed','hassan','baritof@gmail.com','$2b$10$AdgfDQvgrUtih9HlV3o1PeJfqo94LfxXlIUdRd4VqOpgp0x.Tmzp.','USD','ar','CUSTOMER',0,'2025-01-31 10:58:01','2025-01-31 10:58:01'),('ac1fba5e-e538-478a-b3f5-ed7d5aec535c','EZEZE','FDF','mahdi.svt5@gmail.com','$2b$10$Yz5hTY1hcM3VDhmw0sX6.ODZ/ePWODqTAGroHeGOgqyv5mc2k4V3i','MAD','ar','CUSTOMER',0,'2025-01-31 13:22:15','2025-01-31 13:22:15');
+/*!40000 ALTER TABLE `customers` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
 -- Table structure for table `driver_ratings`
 --
 
@@ -267,7 +301,7 @@ CREATE TABLE `users` (
 
 LOCK TABLES `users` WRITE;
 /*!40000 ALTER TABLE `users` DISABLE KEYS */;
-INSERT INTO `users` VALUES ('4a3179b6-f7d9-4aae-9bf1-b3c99a34d290','John','Doe','john.doe@example.com','+33612345678','$2b$10$Krh7atxxAnRcdnoRlcj5Ae2ugxOLdESJl/3EyEcZ7p9UU2EwzZrzi','CUSTOMER',NULL,1,1,NULL,NULL,'2020-12-25 11:33:16','2020-12-25 11:33:16'),('5b3179b6-f7d9-4aae-9bf1-b3c99a34d291','Jane','Smith','jane.smith@example.com','+33698765432','$2b$10$Krh7atxxAnRcdnoRlcj5Ae2ugxOLdESJl/3EyEcZ7p9UU2EwzZrzi','CUSTOMER',NULL,1,1,NULL,NULL,'2020-12-25 11:33:16','2020-12-25 11:33:16'),('6c3179b6-f7d9-4aae-9bf1-b3c99a34d292','Michael','Brown','michael.brown@example.com','+33611223344','$2b$10$Krh7atxxAnRcdnoRlcj5Ae2ugxOLdESJl/3EyEcZ7p9UU2EwzZrzi','CUSTOMER',NULL,1,1,NULL,NULL,'2020-12-25 11:33:16','2020-12-25 11:33:16');
+INSERT INTO `users` VALUES ('4a3179b6-f7d9-4aae-9bf1-b3c99a34d290','John','Doe','john.doe@example.com','+33612345678','$2b$10$Krh7atxxAnRcdnoRlcj5Ae2ugxOLdESJl/3EyEcZ7p9UU2EwzZrzi','CUSTOMER',NULL,1,1,NULL,NULL,'2020-12-25 11:33:16','2020-12-25 11:33:16'),('5b3179b6-f7d9-4aae-9bf1-b3c99a34d291','Jane','Smith','jane.smith@example.com','+33698765432','$2b$10$Krh7atxxAnRcdnoRlcj5Ae2ugxOLdESJl/3EyEcZ7p9UU2EwzZrzi','CUSTOMER',NULL,1,1,NULL,NULL,'2020-12-25 11:33:16','2020-12-25 11:33:16'),('6c3179b6-f7d9-4aae-9bf1-b3c99a34d292','Michael','Brown','michael.brown@example.com','+33611223344','$2b$10$Krh7atxxAnRcdnoRlcj5Ae2ugxOLdESJl/3EyEcZ7p9UU2EwzZrzi','CUSTOMER',NULL,1,1,NULL,NULL,'2020-12-25 11:33:16','2020-12-25 11:33:16'),('6c3179b6-f7d9-4aae-9bf1-b3c99a34d293','Mohammed','hassan','mohammed@gmail.com','0021245454545','$2b$10$Krh7atxxAnRcdnoRlcj5Ae2ugxOLdESJl/3EyEcZ7p9UU2EwzZrzi','DRIVER','driver_mohamed.jpg',1,1,NULL,NULL,'2020-12-25 11:33:16','2020-12-25 11:33:16');
 /*!40000 ALTER TABLE `users` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -316,4 +350,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2025-01-14 14:09:02
+-- Dump completed on 2025-01-31 16:56:16
