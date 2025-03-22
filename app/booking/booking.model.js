@@ -1,9 +1,10 @@
 const { Sequelize, DataTypes, Model } = require('sequelize');
 const sequelize = require("../../params/db");
-
+const bcrypt = require('bcrypt');
 
 // Users Model
-class User extends Model {}
+class User extends Model { }
+
 User.init({
   user_id: {
     type: DataTypes.STRING(255),
@@ -23,17 +24,14 @@ User.init({
     allowNull: false,
     unique: true,
     validate: {
-      isEmail: true,
-      is: /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}$/
+      isEmail: true
     }
   },
   phone_number: {
     type: DataTypes.STRING(20),
-    allowNull: false,
-    unique: true,
-    validate: {
-      is: /^\+?[1-9][0-9]{7,14}$/
-    }
+    allowNull: true,
+    defaultValue: '',
+    unique: true
   },
   password_hash: {
     type: DataTypes.STRING(255),
@@ -45,7 +43,8 @@ User.init({
     allowNull: false
   },
   profile_image_url: {
-    type: DataTypes.STRING(500)
+    type: DataTypes.STRING(500),
+    allowNull: true
   },
   is_verified: {
     type: DataTypes.BOOLEAN,
@@ -60,22 +59,133 @@ User.init({
     defaultValue: DataTypes.NOW
   },
   last_login: {
-    type: DataTypes.DATE
+    type: DataTypes.DATE,
+    allowNull: true
   }
 }, {
   sequelize,
   modelName: 'User',
   tableName: 'Users',
-  indexes: [
-    {
-      unique: true,
-      fields: ['email']
-    }
-  ]
+  timestamps: true
 });
 
+// Méthode pour valider le mot de passe
+User.prototype.validPassword = async function(password) {
+  try {
+    // Si le mot de passe est haché avec bcrypt
+    if (bcrypt.getRounds(this.password_hash)) {
+      return await bcrypt.compare(password, this.password_hash);
+    } else {
+      // Si le mot de passe n'est pas haché (pour le développement uniquement)
+      return this.password_hash === password;
+    }
+  } catch (error) {
+    // Si bcrypt.getRounds échoue, cela signifie que le mot de passe n'est pas haché
+    // Comparaison directe (pour le développement uniquement)
+    return this.password_hash === password;
+  }
+};
+
+// Hook avant la création pour hacher le mot de passe
+User.beforeCreate(async (user) => {
+  if (user.password_hash) {
+    try {
+      // Vérifier si le mot de passe est déjà haché
+      const rounds = bcrypt.getRounds(user.password_hash);
+      if (rounds) {
+        return; // Le mot de passe est déjà haché
+      }
+    } catch (error) {
+      // Le mot de passe n'est pas haché, continuez pour le hacher
+    }
+    
+    // Hacher le mot de passe
+    const salt = await bcrypt.genSalt(10);
+    user.password_hash = await bcrypt.hash(user.password_hash, salt);
+  }
+});
+
+// Hook avant la mise à jour pour hacher le mot de passe si modifié
+User.beforeUpdate(async (user) => {
+  if (user.changed('password_hash')) {
+    try {
+      // Vérifier si le mot de passe est déjà haché
+      const rounds = bcrypt.getRounds(user.password_hash);
+      if (rounds) {
+        return; // Le mot de passe est déjà haché
+      }
+    } catch (error) {
+      // Le mot de passe n'est pas haché, continuez pour le hacher
+    }
+    
+    // Hacher le mot de passe
+    const salt = await bcrypt.genSalt(10);
+    user.password_hash = await bcrypt.hash(user.password_hash, salt);
+  }
+});
+class Transaction extends Model { }
+
+Transaction.init({
+  transaction_id: {
+    type: DataTypes.STRING(255),
+    primaryKey: true,
+    allowNull: false
+  },
+  user_id: {
+    type: DataTypes.STRING(255),
+    allowNull: false
+  },
+  driver_id: {
+    type: DataTypes.STRING(255),
+    allowNull: false
+  },
+  booking_id: {
+    type: DataTypes.STRING(255),
+    allowNull: true
+  },
+  airport_id: {
+    type: DataTypes.STRING(255),
+    allowNull: true
+  },
+  city_id: {
+    type: DataTypes.STRING(255),
+    allowNull: true
+  },
+  amount: {
+    type: DataTypes.DECIMAL(10, 2),
+    allowNull: false
+  },
+  currency: {
+    type: DataTypes.STRING(10),
+    allowNull: false
+  },
+  payment_method: {
+    type: DataTypes.ENUM('CARD', 'DEBIT_CARD', 'PAYPAL', 'CASH'),
+    allowNull: false
+  },
+  payment_status: {
+    type: DataTypes.ENUM('PENDING', 'SUCCESSFUL', 'FAILED'),
+    defaultValue: 'PENDING',
+    allowNull: false
+  },
+  rejected_reason: {
+    type: DataTypes.STRING(255),
+    allowNull: true
+  },
+  transaction_date: {
+    type: DataTypes.DATE,
+    defaultValue: DataTypes.NOW
+  }
+}, {
+  sequelize,
+  modelName: 'Transaction',
+  tableName: 'Transactions',
+  timestamps: false
+});
+
+
 // Airports Model
-class Airport extends Model {}
+class Airport extends Model { }
 Airport.init({
   airport_id: {
     type: DataTypes.STRING(255),
@@ -124,7 +234,7 @@ Airport.init({
   modelName: 'Airport',
   tableName: 'Airports'
 });
-class City extends Model {}
+class City extends Model { }
 City.init({
   city_id: {
     type: DataTypes.STRING(255),
@@ -162,7 +272,7 @@ City.init({
 });
 
 // Vehicles Model
-class Vehicle extends Model {}
+class Vehicle extends Model { }
 Vehicle.init({
   vehicle_id: {
     type: DataTypes.STRING(255),
@@ -220,7 +330,7 @@ Vehicle.init({
 });
 
 // Ride Bookings Model
-class RideBooking extends Model {}
+class RideBooking extends Model { }
 RideBooking.init({
   booking_id: {
     type: DataTypes.STRING(255),
@@ -285,7 +395,7 @@ RideBooking.init({
     allowNull: false
   },
   ride_type: {
-    type: DataTypes.ENUM('AIRPORT_PICKUP', 'AIRPORT_DROPOFF', 'ROUND_TRIP'),
+    type: DataTypes.ENUM('AIRPORT_PICKUP', 'AIRPORT_DROPOFF', 'ROUND_TRIP', 'CITY_TO_CITY'),
     allowNull: false
   },
   total_distance: {
@@ -306,14 +416,71 @@ RideBooking.init({
   created_at: {
     type: DataTypes.DATE,
     defaultValue: DataTypes.NOW
+  },
+  // Nouveaux champs pour les informations complémentaires du booking
+  fromAirport: {
+    type: DataTypes.STRING(255),
+    allowNull: false,
+    comment: 'Information sur l\'aéroport de départ'
+  },
+  toCity: {
+    type: DataTypes.STRING(255),
+    allowNull: false,
+    comment: 'Destination ou lieu d\'arrivée'
+  },
+  flightNumber: {
+    type: DataTypes.STRING(50),
+    allowNull: true,
+    comment: 'Numéro de vol'
+  },
+  departureTime: {
+    type: DataTypes.STRING(50),
+    allowNull: true,
+    comment: 'Heure de départ prévue (format texte pour conserver la mise en forme)'
+  },
+  arrivalTime: {
+    type: DataTypes.STRING(50),
+    allowNull: true,
+    comment: 'Heure d\'arrivée prévue'
+  },
+  estimatedDuration: {
+    type: DataTypes.STRING(50),
+    allowNull: true,
+    comment: 'Durée estimée du trajet (ex: "86 min")'
+  },
+  vehicleType: {
+    type: DataTypes.STRING(50),
+    allowNull: true,
+    comment: 'Type de véhicule (ex: "Standard")'
+  },
+  passengers: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    comment: 'Nombre de passagers'
+  },
+  luggage: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    comment: 'Nombre de bagages'
+  },
+  partner: {
+    type: DataTypes.STRING(100),
+    allowNull: true,
+    comment: 'Partenaire avec lequel la réservation est effectuée'
+  },
+  currency: {
+    type: DataTypes.STRING(10),
+    allowNull: false,
+    comment: 'Devise utilisée pour la transaction'
   }
 }, {
   sequelize,
+  timestamps: true,
   modelName: 'RideBooking',
-  tableName: 'Ride_Bookings',
+  tableName: 'Ride_Booking',
   validate: {
     pickupBeforeDropoff() {
-      if (this.pickup_datetime >= this.estimated_dropoff_datetime) {
+      if (this.pickup_datetime && this.estimated_dropoff_datetime && this.pickup_datetime >= this.estimated_dropoff_datetime) {
         throw new Error('Pickup datetime must be before dropoff datetime');
       }
     }
@@ -325,7 +492,7 @@ RideBooking.init({
 });
 
 // Payments Model
-class Payment extends Model {}
+class Payment extends Model { }
 Payment.init({
   id: {
     type: DataTypes.STRING(255),
@@ -382,7 +549,7 @@ Payment.init({
 });
 
 // Driver Ratings Model
-class DriverRating extends Model {}
+class DriverRating extends Model { }
 DriverRating.init({
   rating_id: {
     type: DataTypes.STRING(255),
@@ -438,7 +605,7 @@ DriverRating.init({
 });
 
 // Pricing Rules Model
-class PricingRule extends Model {}
+class PricingRule extends Model { }
 PricingRule.init({
   pricing_id: {
     type: DataTypes.STRING(255),
@@ -478,70 +645,268 @@ PricingRule.init({
   modelName: 'PricingRule',
   tableName: 'Pricing_Rules'
 });
+class Driver extends Model { }
 
+Driver.init({
+  driver_id: {
+    type: DataTypes.STRING(255),
+    primaryKey: true,
+    allowNull: false
+  },
+  full_name: {
+    type: DataTypes.STRING(255),
+    allowNull: false
+  },
+  email: {
+    type: DataTypes.STRING(255),
+    allowNull: false,
+    validate: { isEmail: true }
+  },
+  latitude: {
+    type: DataTypes.DECIMAL(10, 8),
+    allowNull: false
+  },
+  longitude: {
+    type: DataTypes.DECIMAL(11, 8),
+    allowNull: false
+  },
+  phone_number: {
+    type: DataTypes.STRING(20),
+    allowNull: false
+  },
+  vehicle_id: {
+    type: DataTypes.STRING(255),
+    references: {
+      model: Vehicle,
+      key: 'vehicle_id'
+    }
+  },
+  is_available: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: true,
+    allowNull: false
+  }
+}, {
+  sequelize,
+  modelName: 'Driver',
+  tableName: 'Drivers',
+  timestamps: true // Automatically adds createdAt and updatedAt
+});
 // Define Associations
 User.hasMany(Vehicle, { foreignKey: 'driver_id', as: 'vehicles' });
 Vehicle.belongsTo(User, { foreignKey: 'driver_id', as: 'driver' });
 
-User.hasMany(RideBooking, { 
-  foreignKey: 'customer_id', 
-  as: 'customer_bookings' 
+User.hasMany(RideBooking, {
+  foreignKey: 'customer_id',
+  as: 'customer_bookings'
 });
-User.hasMany(RideBooking, { 
-  foreignKey: 'driver_id', 
-  as: 'driver_bookings' 
-});
-RideBooking.belongsTo(User, { 
-  foreignKey: 'customer_id', 
-  as: 'customer' 
-});
-RideBooking.belongsTo(User, { 
-  foreignKey: 'driver_id', 
-  as: 'driver' 
+Driver.hasOne(Vehicle, {
+  foreignKey: 'vehicle_id',
+  as: 'driver_vehicle'
 });
 
-RideBooking.belongsTo(Vehicle, { 
-  foreignKey: 'vehicle_id', 
-  as: 'vehicle' 
-});
-RideBooking.belongsTo(Airport, { 
-  foreignKey: 'pickup_airport_id', 
-  as: 'pickup_airport' 
-});
-RideBooking.belongsTo(Airport, { 
-  foreignKey: 'dropoff_airport_id', 
-  as: 'dropoff_airport' 
+Transaction.hasOne(Driver, {
+  foreignKey: 'vehicle_id',
+  as: 'driver_transaction'
 });
 
-RideBooking.hasMany(Payment, { 
-  foreignKey: 'booking_id', 
-  as: 'payments' 
+User.hasMany(RideBooking, {
+  foreignKey: 'driver_id',
+  as: 'driver_bookings'
 });
-Payment.belongsTo(RideBooking, { 
-  foreignKey: 'booking_id', 
-  as: 'booking' 
+RideBooking.belongsTo(User, {
+  foreignKey: 'customer_id',
+  as: 'customer'
+});
+RideBooking.belongsTo(User, {
+  foreignKey: 'driver_id',
+  as: 'driver'
 });
 
-RideBooking.hasOne(DriverRating, { 
-  foreignKey: 'booking_id', 
-  as: 'rating' 
+RideBooking.belongsTo(Vehicle, {
+  foreignKey: 'vehicle_id',
+  as: 'vehicle'
 });
-DriverRating.belongsTo(RideBooking, { 
-  foreignKey: 'booking_id', 
-  as: 'booking' 
+RideBooking.belongsTo(Airport, {
+  foreignKey: 'pickup_airport_id',
+  as: 'pickup_airport'
+});
+RideBooking.belongsTo(Airport, {
+  foreignKey: 'dropoff_airport_id',
+  as: 'dropoff_airport'
+});
+
+RideBooking.hasMany(Payment, {
+  foreignKey: 'booking_id',
+  as: 'payments'
+});
+Payment.belongsTo(RideBooking, {
+  foreignKey: 'booking_id',
+  as: 'booking'
+});
+
+RideBooking.hasOne(DriverRating, {
+  foreignKey: 'booking_id',
+  as: 'rating'
+});
+DriverRating.belongsTo(RideBooking, {
+  foreignKey: 'booking_id',
+  as: 'booking'
 });
 
 // Sync Models (Use with caution in production)
 // sequelize.sync({ force: false });
+class PickupPoint extends Model { }
+PickupPoint.init({
+  pickup_point_id: {
+    type: DataTypes.STRING(255),
+    primaryKey: true,
+    allowNull: false
+  },
+  booking_id: {
+    type: DataTypes.STRING(255),
+    allowNull: false,
+    references: {
+      model: 'Ride_Booking',
+      key: 'booking_id'
+    }
+  },
+  passenger_name: {
+    type: DataTypes.STRING(100),
+    allowNull: false
+  },
+  passenger_phone: {
+    type: DataTypes.STRING(20),
+    allowNull: true
+  },
+  passenger_email: {
+    type: DataTypes.STRING(255),
+    allowNull: true
+  },
+  latitude: {
+    type: DataTypes.DECIMAL(10, 7),
+    allowNull: false
+  },
+  longitude: {
+    type: DataTypes.DECIMAL(11, 7),
+    allowNull: false
+  },
+  distance_from_start: {
+    type: DataTypes.DECIMAL(10, 2),
+    allowNull: false,
+    comment: 'Distance en km depuis le point de départ'
+  },
+  percent_of_total_distance: {
+    type: DataTypes.DECIMAL(5, 2),
+    allowNull: false,
+    comment: 'Pourcentage du trajet total'
+  },
+  price_percentage: {
+    type: DataTypes.DECIMAL(5, 2),
+    allowNull: false,
+    comment: 'Pourcentage du prix total appliqué'
+  },
+  price_amount: {
+    type: DataTypes.DECIMAL(10, 2),
+    allowNull: false,
+    comment: 'Montant à payer pour ce passager'
+  },
+  pickup_status: {
+    type: DataTypes.ENUM('PENDING', 'CONFIRMED', 'PICKED_UP', 'CANCELLED'),
+    defaultValue: 'PENDING',
+    allowNull: false
+  },
+  pickup_time: {
+    type: DataTypes.DATE,
+    allowNull: true
+  },
+  created_at: {
+    type: DataTypes.DATE,
+    defaultValue: DataTypes.NOW
+  },
+  updated_at: {
+    type: DataTypes.DATE,
+    defaultValue: DataTypes.NOW
+  }
+}, {
+  sequelize,
+  modelName: 'PickupPoint',
+  tableName: 'Pickup_Points',
+  timestamps: true,
+  createdAt: 'created_at',
+  updatedAt: 'updated_at'
+});
 
+// PricingRule Model ajouté avec les règles de tarification pour les ramassages intermédiaires
+class PricingDistance extends Model { }
+PricingDistance.init({
+  pricing_distance_id: {
+    type: DataTypes.STRING(255),
+    primaryKey: true,
+    allowNull: false
+  },
+  driver_id: {
+    type: DataTypes.STRING(255),
+    allowNull: false,
+    references: {
+      model: 'Users',
+      key: 'user_id'
+    }
+  },
+  min_percent_distance: {
+    type: DataTypes.DECIMAL(5, 2),
+    allowNull: false,
+    comment: 'Pourcentage minimum de distance depuis le point de départ'
+  },
+  max_percent_distance: {
+    type: DataTypes.DECIMAL(5, 2),
+    allowNull: false,
+    comment: 'Pourcentage maximum de distance depuis le point de départ'
+  },
+  price_percentage: {
+    type: DataTypes.DECIMAL(5, 2),
+    allowNull: false,
+    comment: 'Pourcentage du prix total à appliquer'
+  },
+  is_active: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: true
+  },
+  created_at: {
+    type: DataTypes.DATE,
+    defaultValue: DataTypes.NOW
+  },
+  updated_at: {
+    type: DataTypes.DATE,
+    defaultValue: DataTypes.NOW
+  }
+}, {
+  sequelize,
+  modelName: 'PricingDistance',
+  tableName: 'Pricing_Distances',
+  timestamps: true,
+  createdAt: 'created_at',
+  updatedAt: 'updated_at'
+});
+
+// Ajouter les associations
+RideBooking.hasMany(PickupPoint, { foreignKey: 'booking_id', as: 'pickup_points' });
+PickupPoint.belongsTo(RideBooking, { foreignKey: 'booking_id', as: 'booking' });
+
+User.hasMany(PricingDistance, { foreignKey: 'driver_id', as: 'pricing_distances' });
+PricingDistance.belongsTo(User, { foreignKey: 'driver_id', as: 'driver' });
 module.exports = {
   sequelize,
   User,
   Airport,
   Vehicle,
+  PickupPoint,
+  PricingDistance,
   RideBooking,
   Payment,
   DriverRating,
   PricingRule,
-  City
+  City,
+  Transaction,
+  Driver
 };

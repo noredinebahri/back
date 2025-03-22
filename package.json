@@ -39,7 +39,9 @@
     "node-osrm": "^1.0.3",
     "nodemailer": "^6.10.0",
     "sequelize": "^6.37.5",
+    "socket.io": "^4.8.1",
     "stripe": "^13.11.0",
+    "twilio": "^5.4.3",
     "uuid": "^11.0.3"
   },
   "devDependencies": {

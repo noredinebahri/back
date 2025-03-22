@@ -22,47 +22,46 @@ async function createCheckoutSession(priceId) {
 // Modification de la méthode pour inclure le calcul du prix
 async function calculateDistance2(originAirportId, destinationCityId, passengers, luggage) {
   try {
-    // Récupération des coordonnées de l'aéroport
+    // Retrieve airport and city using their IDs
     const origin = await Airport.findOne({ where: { airport_id: originAirportId } });
-
-    // Récupération des coordonnées de la ville de destination
     const destination = await City.findOne({ where: { city_id: destinationCityId } });
-
+    
     if (!origin || !destination) {
-      throw new Error('Aéroport ou ville non trouvée');
+      throw new Error('Airport or City not found');
     }
 
-    // Appel à l'API OSRM pour calculer la distance
-    const response = await axios.get(`https://router.project-osrm.org/route/v1/driving/` +
-      `${origin.longitude},${origin.latitude};${destination.longitude},${destination.latitude}?overview=full&geometries=geojson`);
+    // Call OSRM API to calculate distance (in meters)
+    const response = await axios.get(`https://router.project-osrm.org/route/v1/driving/${origin.longitude},${origin.latitude};${destination.longitude},${destination.latitude}?overview=full&geometries=geojson`);
+    const distanceInMeters = response.data.routes[0].distance;
+    const distanceInKm = distanceInMeters / 1000;
+    console.log(`Calculated distance: ${distanceInKm.toFixed(2)} km`);
 
-    const distanceEnMetres = response.data.routes[0].distance;
-    const distanceEnKm = distanceEnMetres / 1000;
-
-    console.log(`Distance calculée : ${distanceEnKm} km`);
-
-    // Calcul du prix
-    const basePrice = 3;              
-    const pricePerKm = 6.1; 
-    let passengerFee = 0; 
-    const luggageFee = 1; 
-    switch (passengers) {
-      case passengers === 1:
-        passengerFee = 1;
-        break;
-      case passengers < 3 && passengers > 1:
-        passengerFee = 1.5;
-        break;
-      case passengers < 5 && passengers > 3:
-        passengerFee = 2;
-        break;
-      default:
-        passengerFee = 1.3;
+    // Calculate price using business logic
+    const basePrice = 3;
+    const pricePerKm = 6.1;
+    let passengerFee = 0;
+    const luggageFee = 1;
+    
+    // Example: simple logic for passenger fee adjustment
+    if (passengers === 1) {
+      passengerFee = 1;
+    } else if (passengers > 1 && passengers < 3) {
+      passengerFee = 1.5;
+    } else if (passengers >= 3 && passengers < 5) {
+      passengerFee = 2;
+    } else {
+      passengerFee = 1.3;
     }
-    const totalPrice = (basePrice + (distanceEnKm * pricePerKm) + passengerFee + luggageFee)/10;
-    return { distance: distanceEnKm.toFixed(2), price: totalPrice.toFixed(2) };
+    
+    // Calculate total price and adjust as necessary (here, dividing by 10 as in original code)
+    const totalPrice = (basePrice + (distanceInKm * pricePerKm) + passengerFee + luggageFee) / 10;
+    
+    return {
+      distance: distanceInKm.toFixed(2),
+      price: totalPrice.toFixed(2)
+    };
   } catch (error) {
-    console.error('Erreur lors du calcul de la distance:', error);
+    console.error('Error calculating distance:', error);
     throw error;
   }
 }

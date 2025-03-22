@@ -7,7 +7,8 @@ const {
   RideBooking, 
   Payment, 
   DriverRating, 
-  PricingRule 
+  PricingRule,
+  Transaction
 } = require("../app/booking/booking.model"); // Adjust the path to where you saved the models
 const Customers = require("../app/user/auth/auth.model");
 async function initializeDatabase() {
@@ -25,6 +26,7 @@ async function initializeDatabase() {
     await Payment.sync();
     await DriverRating.sync();
     await PricingRule.sync();
+    await Transaction.sync();
     await Customers.sync().then(() => {
       console.log('Customers table created successfully');
     } );

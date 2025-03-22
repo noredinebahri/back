@@ -120,6 +120,7 @@ const convertCurrencies = async (price, fromCurrency, toCurrency) => {
 
 exports.calculatePrice = async (req, res) => {
   const { airportId, cityId, passengers, luggage } = req.body;
+  console.log(req.body);
   try {
     const result = await bookingRepository.calculateDistance2(airportId, cityId, passengers, luggage);
     const [priceUsd, priceEuro] = await Promise.all([
@@ -141,26 +142,55 @@ exports.calculatePrice = async (req, res) => {
 
 exports.checkoutSession = async (req, res) => {
   try {
-    const { amount, currency, phone, fullName, airport, description, city, email, distance } = req.body;
+    const { 
+      amount, 
+      currency, 
+      description, 
+      user_id, 
+      fromAirport, 
+      toCity, 
+      flightNumber, 
+      departureTime, 
+      arrivalTime, 
+      estimatedDuration, 
+      vehicleType, 
+      passengers, 
+      luggage, 
+      partner 
+    } = req.body;
+    
+    // Vérifier que les informations requises sont présentes
+    if (!user_id || !fromAirport || !toCity) {
+      return res.status(400).json({ error: 'Missing required metadata for session creation' });
+    }
+    
     const session = await stripe.checkout.sessions.create({
-      line_items: [
-        {
-          price_data: {
-            currency: currency || 'usd', // Devise dynamique ou par défaut
-            product_data: {
-              name: description || 'Dynamic Service', // Nom du produit ou service
-            },
-            unit_amount: Math.round(amount * 100), // Prix en centimes
+      payment_method_types: ['card'],
+      line_items: [{
+        price_data: {
+          currency: currency || 'usd',
+          product_data: {
+            name: description || 'Dynamic Service',
           },
-          quantity: 1, // Quantité par défaut : 1
+          unit_amount: Math.round(amount * 100), // Stripe attend le montant en cents
         },
-      ],
+        quantity: 1,
+      }],
       mode: 'payment',
       metadata: {
-        distance: distance, // Distance en KM
-        description,
-        currency,
-        amount
+        user_id,      // ex: "user_001"
+        amount,       // ex: "73.47"
+        currency,     // ex: "GBP"
+        fromAirport,  // ex: "Casablanca Mohammed V Airport (CMN), Casa-Oasis, Nouasseur, Casablanca 8101, Maroc"
+        toCity,       // ex: "Ibis Rabat Agdal, Avenue Haj Ahmed, Place De La Gare, Rue Cherkaoui, Rabat 10000, Maroc"
+        flightNumber, // ex: "AA7979"
+        departureTime, // ex: "ven., 14 févr. · 14:30"
+        arrivalTime,  // ex: "ven., 14 févr. · 15:56"
+        estimatedDuration, // ex: "86 min"
+        vehicleType,  // ex: "Standard"
+        passengers,   // ex: "3"
+        luggage,      // ex: "3"
+        partner       // ex: "Transferz"
       },
       success_url: `${YOUR_DOMAIN}/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${YOUR_DOMAIN}/cancel`,
@@ -171,7 +201,82 @@ exports.checkoutSession = async (req, res) => {
     console.error('Erreur lors de la création de la session de paiement:', error);
     res.status(500).json({ error: error.message });
   }
-}
+};
+exports.completeTransaction = async (req, res) => {
+  try {
+    const { sessionId } = req.body;
+    if (!sessionId) {
+      return res.status(400).json({ error: 'Session ID is required' });
+    }
+
+    // Récupérer la session Stripe
+    const session = await stripe.checkout.sessions.retrieve(sessionId);
+    
+    // Vérifier que le paiement est bien terminé
+    if (!session || session.payment_status !== 'paid') {
+      return res.status(400).json({ error: 'Payment has not been completed' });
+    }
+
+    // Liste des champs requis dans le metadata
+    const requiredFields = [
+      'user_id', 
+      'fromAirport', 
+      'toCity', 
+      'flightNumber', 
+      'departureTime', 
+      'arrivalTime', 
+      'estimatedDuration', 
+      'vehicleType', 
+      'passengers', 
+      'luggage', 
+      'partner'
+    ];
+
+    // Validation des métadonnées
+    for (let field of requiredFields) {
+      if (!session.metadata[field]) {
+        return res.status(400).json({ error: `Missing required metadata field: ${field}` });
+      }
+    }
+
+    // Création de la transaction (exemple)
+    const transactionData = {
+      transaction_id: session.id,
+      user_id: session.metadata.user_id,
+      amount: parseFloat(session.metadata.amount),
+      currency: session.metadata.currency,
+      payment_method: session.payment_method_types[0]?.toUpperCase() || 'UNKNOWN',
+      payment_status: 'SUCCESSFUL',
+      transaction_date: new Date()
+    };
+
+    const transaction = await transactionService.createTransaction(transactionData);
+
+    // Construire l'objet booking avec les informations provenant du metadata
+    const booking = {
+      departureTime: session.metadata.departureTime,
+      fromAirport: session.metadata.fromAirport,
+      arrivalTime: session.metadata.arrivalTime,
+      estimatedDuration: session.metadata.estimatedDuration,
+      toCity: session.metadata.toCity,
+      flightNumber: session.metadata.flightNumber,
+      vehicleType: session.metadata.vehicleType,
+      passengers: session.metadata.passengers,
+      luggage: session.metadata.luggage,
+      partner: session.metadata.partner,
+      price: session.metadata.amount,
+      currency: session.metadata.currency
+    };
+
+    // Vous pouvez stocker le booking dans votre base de données ou l'utiliser dans votre logique métier
+
+    // Renvoyer la transaction et l'objet booking dans la réponse
+    res.status(200).json({ transaction, booking, driver: {} });
+  } catch (error) {
+    console.error('Error in completeTransaction endpoint:', error);
+    res.status(500).json({ error: error.message });
+  }
+};
 exports.sessionStatus = async (req, res) => {
   try {
     const session = await stripe.checkout.sessions.retrieve(req.query.session_id);
