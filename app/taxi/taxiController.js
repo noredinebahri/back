@@ -1,7 +1,7 @@
 // controllers/taxiController.js
 
 const { v4: uuidv4 } = require('uuid');
-const { User, Vehicle, RideBooking, Airport, City, Driver, PricingRule } = require('../booking/booking.model');
+const { User, Vehicle, RideBooking, Airport, City, Driver, PricingRule,DriverRating  } = require('../booking/booking.model');
 const bcrypt = require('bcrypt');
 /**
  * Create a new taxi booking
@@ -377,71 +377,71 @@ exports.getDriverVehicles = async (req, res) => {
  * @param {Object} req - Request object
  * @param {Object} res - Response object
  */
-exports.updateBookingStatus = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { status } = req.body;
-    
-    const booking = await RideBooking.findByPk(id);
-    
-    if (!booking) {
-      return res.status(404).json({ message: 'Booking not found' });
-    }
-
-    // Validate status
-    const validStatuses = ['PENDING', 'CONFIRMED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'];
-    if (!validStatuses.includes(status)) {
-      return res.status(400).json({ message: 'Invalid status value' });
-    }
-
-    // Cas spécial: un chauffeur accepte une réservation en attente
-    if (req.user.user_type === 'DRIVER' && booking.driver_id === null && status === 'CONFIRMED') {
-      // Assigner le chauffeur à la réservation
-      booking.driver_id = req.user.user_id;
+  exports.updateBookingStatus = async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { status } = req.body;
       
-      // Récupérer le véhicule du chauffeur (si disponible)
-      const vehicle = await Vehicle.findOne({ where: { driver_id: req.user.user_id, is_active: true } });
-      if (vehicle) {
-        booking.vehicle_id = vehicle.vehicle_id;
+      const booking = await RideBooking.findByPk(id);
+      
+      if (!booking) {
+        return res.status(404).json({ message: 'Booking not found' });
       }
-      
+
+      // Validate status
+      const validStatuses = ['PENDING', 'CONFIRMED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'];
+      if (!validStatuses.includes(status)) {
+        return res.status(400).json({ message: 'Invalid status value' });
+      }
+
+      // Cas spécial: un chauffeur accepte une réservation en attente
+      if (req.user.user_type === 'DRIVER' && booking.driver_id === null && status === 'CONFIRMED') {
+        // Assigner le chauffeur à la réservation
+        booking.driver_id = req.user.user_id;
+        
+        // Récupérer le véhicule du chauffeur (si disponible)
+        const vehicle = await Vehicle.findOne({ where: { driver_id: req.user.user_id, is_active: true } });
+        if (vehicle) {
+          booking.vehicle_id = vehicle.vehicle_id;
+        }
+        
+        booking.booking_status = status;
+        await booking.save();
+        
+        return res.status(200).json({
+          success: true,
+          message: 'Réservation confirmée et assignée au chauffeur',
+          data: booking
+        });
+      }
+
+      // Vérification d'autorisation standard
+      if (req.user.user_type === 'DRIVER' && booking.driver_id !== req.user.user_id) {
+        return res.status(403).json({ message: 'You are not authorized to update this booking' });
+      }
+
+      if (req.user.user_type === 'CUSTOMER' && booking.customer_id !== req.user.user_id) {
+        return res.status(403).json({ message: 'You are not authorized to update this booking' });
+      }
+
+      // Update the booking status
       booking.booking_status = status;
       await booking.save();
-      
-      return res.status(200).json({
+
+      res.status(200).json({
         success: true,
-        message: 'Réservation confirmée et assignée au chauffeur',
+        message: 'Booking status updated successfully',
         data: booking
       });
+    } catch (error) {
+      console.error('Error updating booking status:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to update booking status',
+        error: error.message
+      });
     }
-
-    // Vérification d'autorisation standard
-    if (req.user.user_type === 'DRIVER' && booking.driver_id !== req.user.user_id) {
-      return res.status(403).json({ message: 'You are not authorized to update this booking' });
-    }
-
-    if (req.user.user_type === 'CUSTOMER' && booking.customer_id !== req.user.user_id) {
-      return res.status(403).json({ message: 'You are not authorized to update this booking' });
-    }
-
-    // Update the booking status
-    booking.booking_status = status;
-    await booking.save();
-
-    res.status(200).json({
-      success: true,
-      message: 'Booking status updated successfully',
-      data: booking
-    });
-  } catch (error) {
-    console.error('Error updating booking status:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to update booking status',
-      error: error.message
-    });
-  }
-};
+  };
 
 /**
  * Get available drivers near a location

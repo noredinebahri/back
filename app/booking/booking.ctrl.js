@@ -1,12 +1,12 @@
 const bookingService = require('./booking.service');
 const bookingRepository = require('./booking.repository');
-const { Airport, City } = require("./booking.model");
+const { Airport, City, RideBooking,Payment } = require("./booking.model");
 const { generateResponse } = require("./gptService");
 const flightdata = require('flight-data');
 const axios = require('axios');
 const YOUR_DOMAIN = 'http://localhost:4200'; // Adapter selon votre domaine
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
-
+const uuidv4 = require('uuid').v4;
 async function getRideBooking(req, res) {
   try {
     const rides = await bookingService.getAllRides();
@@ -15,17 +15,175 @@ async function getRideBooking(req, res) {
     res.status(500).json({ error: error.message || 'Failed to retrieve rides.', success: false }); // Send a 500 error
   }
 }
+/**
+ * Génère une nouvelle réservation de taxi
+ * @param {Object} req - Request object
+ * @param {Object} res - Response object
+ */
 exports.generate = async (req, res) => {
-  const { prompt } = req.body;
   try {
-    console.log("Prompt reçu :", prompt);
-    const response = await bookingService.generateResponse(prompt);
-    console.log("Réponse générée :", response);
-    res.status(200).json({ response });
+    const { 
+      pickup_location, 
+      dropoff_location, 
+      pickup_datetime,
+      pickup_lat,
+      pickup_lng, 
+      dropoff_lat,
+      dropoff_lng,
+      ride_type = 'INTRA_CITY',
+      vehicle_type = 'SEDAN',
+      passengers = 1,
+      luggage = 0,
+      currency = 'MAD'
+    } = req.body;
+
+    // Vérifier les données obligatoires
+    if (!pickup_location || !dropoff_location || !pickup_datetime) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Les informations de départ, d\'arrivée et l\'heure de prise en charge sont requises' 
+      });
+    }
+
+    // Vérifier que le nombre de passagers ne dépasse pas 6
+    if (passengers > 6) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Maximum 6 passagers autorisés par véhicule' 
+      });
+    }
+
+    // Générer un ID unique pour la réservation
+    const booking_id = uuidv4();
+
+    // Déterminer le point de départ et d'arrivée
+    let fromLocation, toLocation;
+    let distance = 0;
+    
+    // Aéroports par défaut (nécessaires pour la structure de la base de données)
+    const defaultPickupAirportId = "DEFAULT-APT-001";
+    const defaultDropoffAirportId = "DEFAULT-APT-002";
+
+    // Calculer la distance en utilisant les coordonnées
+    if (pickup_lat && pickup_lng && dropoff_lat && dropoff_lng) {
+      distance = calculateDistance(
+        parseFloat(pickup_lat), 
+        parseFloat(pickup_lng), 
+        parseFloat(dropoff_lat), 
+        parseFloat(dropoff_lng)
+      );
+    } else {
+      // Si pas de coordonnées, essayer de déterminer la distance à partir des noms de lieux
+      // Chercher les lieux dans la base de données
+      fromLocation = await City.findOne({ 
+        where: { city_name: pickup_location.split(',')[0].trim() } 
+      });
+      
+      toLocation = await City.findOne({ 
+        where: { city_name: dropoff_location.split(',')[0].trim() } 
+      });
+
+      if (fromLocation && toLocation) {
+        distance = calculateDistance(
+          parseFloat(fromLocation.latitude),
+          parseFloat(fromLocation.longitude),
+          parseFloat(toLocation.latitude),
+          parseFloat(toLocation.longitude)
+        );
+      } else {
+        // Distance par défaut si impossible à calculer
+        distance = 10;
+      }
+    }
+
+    // Calculer le prix estimé
+    let baseFare;
+    let perKmRate;
+    
+    // Tarifs selon le type de véhicule
+    switch(vehicle_type) {
+      case 'SUV':
+        baseFare = 30;
+        perKmRate = 3;
+        break;
+      case 'LUXURY':
+        baseFare = 50;
+        perKmRate = 4;
+        break;
+      case 'MINIVAN':
+        baseFare = 40;
+        perKmRate = 3.5;
+        break;
+      default: // SEDAN
+        baseFare = 20;
+        perKmRate = 2.5;
+    }
+    
+    // Calcul du prix total
+    const passengerFare = 5;
+    let totalPrice = baseFare + (distance * perKmRate) + (passengers * passengerFare);
+    
+    // Supplément pour les bagages
+    if (luggage > 0) {
+      totalPrice += luggage * 3;
+    }
+    
+    // Arrondir le prix à 2 décimales
+    totalPrice = Math.round(totalPrice * 100) / 100;
+
+    // Créer l'enregistrement de réservation
+    const booking = await RideBooking.create({
+      booking_id,
+      customer_id: req.user.user_id,
+      pickup_location,
+      dropoff_location,
+      pickup_datetime,
+      pickup_airport_id: defaultPickupAirportId,
+      dropoff_airport_id: defaultDropoffAirportId,
+      booking_status: 'PENDING',
+      ride_type,
+      total_distance: distance,
+      total_price: totalPrice,
+      payment_status: 'PENDING',
+      fromAirport: pickup_location,
+      toCity: dropoff_location,
+      vehicleType: vehicle_type,
+      passengers,
+      luggage,
+      currency,
+      estimatedDuration: `${Math.round(distance / 60 * 60)} min`, // Estimation basée sur 60km/h de moyenne
+      // Coordonnées GPS si fournies
+      ...(pickup_lat && pickup_lng ? { latitude: pickup_lat, longitude: pickup_lng } : {}),
+    });
+
+    res.status(201).json({
+      success: true,
+      message: 'Réservation créée avec succès',
+      data: booking
+    });
   } catch (error) {
-    console.error("Erreur :", error);
-    res.status(500).json({ error: error.message });
+    console.error('Error generating booking:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur lors de la création de la réservation',
+      error: error.message
+    });
   }
+};
+function calculateDistance(lat1, lon1, lat2, lon2) {
+  const R = 6371; // Rayon de la Terre en km
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a = 
+    Math.sin(dLat/2) * Math.sin(dLat/2) +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * 
+    Math.sin(dLon/2) * Math.sin(dLon/2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  const distance = R * c;
+  return Math.round(distance * 100) / 100; // Arrondi à 2 décimales
+}
+function toRad(value) {
+  return value * Math.PI / 180;
 }
 exports.getMoroccanAirports = async (req, res) => {
   try {
@@ -71,34 +229,6 @@ exports.calculteRideFromTo = async (req, res) => {
     res.status(404).json(error);
   }
 }
-// async function createRideBooking(req, res) {
-//      try {
-//        const newRide = req.body; 
-//        const bookingId = await bookingService.addRide(newRide);
-//        res.status(201).json({ message: 'Ride booking created successfully', bookingId });
-//      } catch (error) {
-//        console.error('Error in booking controller:', error);
-//        res.status(500).json({ error: error.message || 'Failed to create ride booking.' });
-//      }
-//    }
-
-//  async function getFlightByIataAndNumber(flight_number, airline_iata) {
-//   try {
-//     const response = await axios.get('http://api.aviationstack.com/v1/flights', {
-//       params: {
-//         access_key: '557bc3ccce80ec0a9d7d67616f766b44',
-//         flight_number,
-//         airline_iata,
-//         limit: 2
-//       }
-//     });
-//     return response.data;
-//   } catch (error) {
-//     console.error('Error fetching flight data:', error);
-//     throw error;
-//   }
-// }
-
 const convertCurrencies = async (price, fromCurrency, toCurrency) => {
   try {
     const apiKey = process.env.FREE_CURRENCY_API_KEY;
@@ -117,7 +247,6 @@ const convertCurrencies = async (price, fromCurrency, toCurrency) => {
     return `Erreur : ${error.message}`;
   }
 };
-
 exports.calculatePrice = async (req, res) => {
   const { airportId, cityId, passengers, luggage } = req.body;
   console.log(req.body);
@@ -309,5 +438,400 @@ exports.convertCurrency = async (req, res) => {
     res.status(200).json({ currency: (amount * rate).toFixed(2) });
   } catch (error) {
     res.status(500).json({ error: 'Erreur lors de la conversion de devise : ' + error });
+  }
+};
+
+/**
+ * Créer un paiement en espèces
+ * @param {Object} req - Request object
+ * @param {Object} res - Response object
+ */
+exports.createCashPayment = async (req, res) => {
+  try {
+    const { booking_id } = req.params;
+    
+    // Vérifier si la réservation existe
+    const booking = await RideBooking.findByPk(booking_id);
+    if (!booking) {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'Réservation non trouvée' 
+      });
+    }
+    
+    // Vérifier si la réservation a déjà été payée
+    const existingPayment = await Payment.findOne({ 
+      where: { 
+        booking_id, 
+        payment_status: 'COMPLETED' 
+      } 
+    });
+    
+    if (existingPayment) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Cette réservation a déjà été payée' 
+      });
+    }
+    
+    // Vérifier que l'utilisateur est soit le client, soit le chauffeur, soit un admin
+    if (req.user.user_id !== booking.customer_id && 
+        req.user.user_id !== booking.driver_id && 
+        req.user.user_type !== 'ADMIN') {
+      return res.status(403).json({ 
+        success: false, 
+        message: 'Non autorisé à effectuer le paiement' 
+      });
+    }
+    
+    // Créer le paiement
+    const payment_id = uuidv4();
+    const payment = await Payment.create({
+      payment_id,
+      booking_id,
+      user_id: booking.customer_id,
+      amount: booking.total_price,
+      currency: booking.currency || 'MAD',
+      payment_method: 'CASH',
+      payment_status: 'COMPLETED',
+      payment_date: new Date()
+    });
+    
+    // Mettre à jour le statut de paiement de la réservation
+    booking.payment_status = 'PAID';
+    await booking.save();
+    
+    res.status(201).json({
+      success: true,
+      message: 'Paiement en espèces enregistré avec succès',
+      data: payment
+    });
+  } catch (error) {
+    console.error('Error creating cash payment:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur lors de la création du paiement en espèces',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Créer un paiement par carte
+ * @param {Object} req - Request object
+ * @param {Object} res - Response object
+ */
+exports.createCardPayment = async (req, res) => {
+  try {
+    const { booking_id } = req.params;
+    const { card_number, expiry_date, cvv } = req.body;
+    
+    // Validation des données de carte
+    if (!card_number || !expiry_date || !cvv) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Informations de carte incomplètes' 
+      });
+    }
+    
+    // Vérifier si la réservation existe
+    const booking = await RideBooking.findByPk(booking_id);
+    if (!booking) {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'Réservation non trouvée' 
+      });
+    }
+    
+    // Vérifier si la réservation a déjà été payée
+    const existingPayment = await Payment.findOne({ 
+      where: { 
+        booking_id, 
+        payment_status: 'COMPLETED' 
+      } 
+    });
+    
+    if (existingPayment) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Cette réservation a déjà été payée' 
+      });
+    }
+    
+    // Vérifier que l'utilisateur est le client
+    if (req.user.user_id !== booking.customer_id) {
+      return res.status(403).json({ 
+        success: false, 
+        message: 'Seul le client peut effectuer un paiement par carte' 
+      });
+    }
+    
+    // Simuler un traitement de paiement par carte
+    // Dans une vraie application, vous utiliseriez un service comme Stripe ou PayPal
+    const transaction_id = `TR-${Date.now()}`;
+    const card_last_four = card_number.slice(-4);
+    
+    // Créer le paiement
+    const payment_id = uuidv4();
+    const payment = await Payment.create({
+      payment_id,
+      booking_id,
+      user_id: booking.customer_id,
+      amount: booking.total_price,
+      currency: booking.currency || 'MAD',
+      payment_method: 'CARD',
+      payment_status: 'COMPLETED',
+      transaction_id,
+      card_last_four,
+      payment_date: new Date()
+    });
+    
+    // Mettre à jour le statut de paiement de la réservation
+    booking.payment_status = 'PAID';
+    await booking.save();
+    
+    res.status(201).json({
+      success: true,
+      message: 'Paiement par carte effectué avec succès',
+      data: payment
+    });
+  } catch (error) {
+    console.error('Error creating card payment:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur lors du paiement par carte',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Créer un paiement par abonnement
+ * @param {Object} req - Request object
+ * @param {Object} res - Response object
+ */
+exports.createSubscriptionPayment = async (req, res) => {
+  try {
+    const { booking_id } = req.params;
+    const { subscription_id } = req.body;
+    
+    // Validation des données
+    if (!subscription_id) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'ID d\'abonnement requis' 
+      });
+    }
+    
+    // Vérifier si la réservation existe
+    const booking = await RideBooking.findByPk(booking_id);
+    if (!booking) {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'Réservation non trouvée' 
+      });
+    }
+    
+    // Vérifier si la réservation a déjà été payée
+    const existingPayment = await Payment.findOne({ 
+      where: { 
+        booking_id, 
+        payment_status: 'COMPLETED' 
+      } 
+    });
+    
+    if (existingPayment) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Cette réservation a déjà été payée' 
+      });
+    }
+    
+    // Vérifier que l'utilisateur est le client
+    if (req.user.user_id !== booking.customer_id) {
+      return res.status(403).json({ 
+        success: false, 
+        message: 'Seul le client peut effectuer un paiement par abonnement' 
+      });
+    }
+    
+    // Vérifier si l'abonnement existe et est actif
+    const subscription = await Subscription.findOne({
+      where: {
+        subscription_id,
+        user_id: req.user.user_id,
+        is_active: true
+      }
+    });
+    
+    if (!subscription) {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'Abonnement non trouvé ou inactif' 
+      });
+    }
+    
+    // Vérifier s'il reste des crédits disponibles
+    const remainingCredits = subscription.credits_total - subscription.credits_used;
+    const tripCost = Math.ceil(booking.total_price); // Convertir en crédits (1 crédit = 1 MAD)
+    
+    if (remainingCredits < tripCost) {
+      return res.status(400).json({ 
+        success: false, 
+        message: `Crédits insuffisants. Vous avez ${remainingCredits} crédits, mais la course coûte ${tripCost} crédits.` 
+      });
+    }
+    
+    // Mettre à jour les crédits utilisés
+    subscription.credits_used += tripCost;
+    await subscription.save();
+    
+    // Créer le paiement
+    const payment_id = uuidv4();
+    const payment = await Payment.create({
+      payment_id,
+      booking_id,
+      user_id: booking.customer_id,
+      amount: booking.total_price,
+      currency: booking.currency || 'MAD',
+      payment_method: 'SUBSCRIPTION',
+      payment_status: 'COMPLETED',
+      subscription_id,
+      payment_date: new Date()
+    });
+    
+    // Mettre à jour le statut de paiement de la réservation
+    booking.payment_status = 'PAID';
+    await booking.save();
+    
+    res.status(201).json({
+      success: true,
+      message: 'Paiement par abonnement effectué avec succès',
+      data: {
+        payment,
+        subscription: {
+          remaining_credits: subscription.credits_total - subscription.credits_used,
+          plan_name: subscription.plan_name
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Error creating subscription payment:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur lors du paiement par abonnement',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Obtenir l'historique des paiements d'un utilisateur
+ * @param {Object} req - Request object
+ * @param {Object} res - Response object
+ */
+exports.getUserPayments = async (req, res) => {
+  try {
+    const userId = req.user.user_id;
+    
+    const payments = await Payment.findAll({
+      where: { user_id: userId },
+      include: [
+        { 
+          model: RideBooking, 
+          as: 'booking',
+          attributes: ['booking_id', 'pickup_location', 'dropoff_location', 'pickup_datetime', 'total_distance']
+        }
+      ],
+      order: [['payment_date', 'DESC']]
+    });
+    
+    res.status(200).json({
+      success: true,
+      count: payments.length,
+      data: payments
+    });
+  } catch (error) {
+    console.error('Error fetching user payments:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur lors de la récupération des paiements',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Modification de la fonction pour compléter une course en vérifiant le paiement
+ * @param {Object} req - Request object
+ * @param {Object} res - Response object
+ */
+exports.completeRide = async (req, res) => {
+  try {
+    const { booking_id } = req.params;
+    
+    // Vérifier si la réservation existe
+    const booking = await RideBooking.findByPk(booking_id);
+    if (!booking) {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'Réservation non trouvée' 
+      });
+    }
+    
+    // Vérifier que l'utilisateur est bien le chauffeur assigné à cette course
+    if (req.user.user_type !== 'DRIVER' || booking.driver_id !== req.user.user_id) {
+      return res.status(403).json({ 
+        success: false, 
+        message: 'Seul le chauffeur assigné peut compléter cette course' 
+      });
+    }
+    
+    // Vérifier que la course est en cours (IN_PROGRESS)
+    if (booking.booking_status !== 'IN_PROGRESS') {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Seule une course en cours peut être complétée' 
+      });
+    }
+    
+    // Vérifier si le paiement est déjà effectué
+    const payment = await Payment.findOne({
+      where: {
+        booking_id,
+        payment_status: 'COMPLETED'
+      }
+    });
+    
+    // Si paiement effectué, compléter la course
+    if (payment) {
+      // Mettre à jour le statut
+      booking.booking_status = 'COMPLETED';
+      
+      // Enregistrer l'heure de fin
+      booking.completed_at = new Date();
+      
+      await booking.save();
+      
+      res.status(200).json({
+        success: true,
+        message: 'Course complétée avec succès',
+        data: booking
+      });
+    } else {
+      // Si pas de paiement, informer que le paiement est requis
+      res.status(400).json({
+        success: false,
+        message: 'Le paiement est requis avant de compléter la course',
+        payment_methods: ['CASH', 'CARD', 'SUBSCRIPTION']
+      });
+    }
+  } catch (error) {
+    console.error('Error completing ride:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur lors de la complétion de la course',
+      error: error.message
+    });
   }
 };

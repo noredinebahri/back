@@ -62,4 +62,54 @@ bookingRoute.post('/pricing/rules', authMiddleware, pickupController.setDriverPr
  */
 bookingRoute.get('/pricing/rules/:driver_id?', authMiddleware, pickupController.getDriverPricingRules);
 
+/**
+ * @route   POST /api/payment/cash/:booking_id
+ * @desc    Créer un paiement en espèces
+ * @access  Private (Customer/Driver)
+ */
+bookingRoute.post('/cash/:booking_id', 
+  authMiddleware, 
+  bookingCtrl.createCashPayment
+);
+
+/**
+ * @route   POST /api/payment/card/:booking_id
+ * @desc    Créer un paiement par carte
+ * @access  Private (Customer only)
+ */
+bookingRoute.post('/card/:booking_id', 
+  authMiddleware, 
+  bookingCtrl.createCardPayment
+);
+
+/**
+ * @route   POST /api/payment/subscription/:booking_id
+ * @desc    Créer un paiement par abonnement
+ * @access  Private (Customer only)
+ */
+bookingRoute.post('/subscription/:booking_id', 
+  authMiddleware, 
+  bookingCtrl.createSubscriptionPayment
+);
+
+/**
+ * @route   GET /api/payment/history
+ * @desc    Obtenir l'historique des paiements d'un utilisateur
+ * @access  Private
+ */
+bookingRoute.get('/history', 
+  authMiddleware, 
+  bookingCtrl.getUserPayments
+);
+
+/**
+ * @route   PUT /api/payment/complete/:booking_id
+ * @desc    Compléter une course (vérification du paiement incluse)
+ * @access  Private (Driver only)
+ */
+bookingRoute.put('/complete/:booking_id', 
+  authMiddleware, 
+  bookingCtrl.completeRide
+);
+
 module.exports = bookingRoute;

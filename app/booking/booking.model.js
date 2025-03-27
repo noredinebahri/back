@@ -494,7 +494,7 @@ RideBooking.init({
 // Payments Model
 class Payment extends Model { }
 Payment.init({
-  id: {
+  payment_id: {
     type: DataTypes.STRING(255),
     primaryKey: true,
     allowNull: false
@@ -503,7 +503,7 @@ Payment.init({
     type: DataTypes.STRING(255),
     allowNull: false,
     references: {
-      model: RideBooking,
+      model: 'ride_booking', // S'assurer qu'il pointe vers la bonne table
       key: 'booking_id'
     }
   },
@@ -511,13 +511,9 @@ Payment.init({
     type: DataTypes.STRING(255),
     allowNull: false,
     references: {
-      model: User,
+      model: 'Users',
       key: 'user_id'
     }
-  },
-  payment_method: {
-    type: DataTypes.ENUM('CREDIT_CARD', 'DEBIT_CARD', 'PAYPAL', 'CASH'),
-    allowNull: false
   },
   amount: {
     type: DataTypes.DECIMAL(10, 2),
@@ -526,16 +522,41 @@ Payment.init({
       min: 0.01
     }
   },
+  currency: {
+    type: DataTypes.STRING(3),
+    defaultValue: 'MAD',
+    allowNull: false
+  },
+  payment_method: {
+    type: DataTypes.ENUM('CASH', 'CARD', 'SUBSCRIPTION'),
+    allowNull: false
+  },
   payment_status: {
-    type: DataTypes.ENUM('PENDING', 'SUCCESSFUL', 'FAILED'),
+    type: DataTypes.ENUM('PENDING', 'COMPLETED', 'FAILED', 'REFUNDED'),
     defaultValue: 'PENDING',
     allowNull: false
   },
   transaction_id: {
     type: DataTypes.STRING(255),
-    unique: true
+    allowNull: true
   },
-  payment_datetime: {
+  card_last_four: {
+    type: DataTypes.STRING(4),
+    allowNull: true
+  },
+  subscription_id: {
+    type: DataTypes.STRING(255),
+    allowNull: true
+  },
+  payment_date: {
+    type: DataTypes.DATE,
+    defaultValue: DataTypes.NOW
+  },
+  created_at: {
+    type: DataTypes.DATE,
+    defaultValue: DataTypes.NOW
+  },
+  updated_at: {
     type: DataTypes.DATE,
     defaultValue: DataTypes.NOW
   }
@@ -543,10 +564,96 @@ Payment.init({
   sequelize,
   modelName: 'Payment',
   tableName: 'Payments',
-  indexes: [
-    { fields: ['booking_id'] }
-  ]
+  timestamps: true,
+  createdAt: 'created_at',
+  updatedAt: 'updated_at'
 });
+
+// Subscription model - Nouveau
+class Subscription extends Model { }
+Subscription.init({
+  subscription_id: {
+    type: DataTypes.STRING(255),
+    primaryKey: true,
+    allowNull: false
+  },
+  user_id: {
+    type: DataTypes.STRING(255),
+    allowNull: false,
+    references: {
+      model: 'Users',
+      key: 'user_id'
+    }
+  },
+  plan_name: {
+    type: DataTypes.STRING(100),
+    allowNull: false
+  },
+  amount: {
+    type: DataTypes.DECIMAL(10, 2),
+    allowNull: false
+  },
+  currency: {
+    type: DataTypes.STRING(3),
+    defaultValue: 'MAD',
+    allowNull: false
+  },
+  billing_cycle: {
+    type: DataTypes.ENUM('MONTHLY', 'QUARTERLY', 'YEARLY'),
+    allowNull: false,
+    defaultValue: 'MONTHLY'
+  },
+  credits_total: {
+    type: DataTypes.INTEGER,
+    allowNull: false, 
+    defaultValue: 0,
+    comment: 'Total credits available in the subscription'
+  },
+  credits_used: {
+    type: DataTypes.INTEGER,
+    allowNull: false,
+    defaultValue: 0
+  },
+  start_date: {
+    type: DataTypes.DATE,
+    allowNull: false
+  },
+  end_date: {
+    type: DataTypes.DATE,
+    allowNull: false
+  },
+  is_active: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: true
+  },
+  auto_renew: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: true
+  },
+  created_at: {
+    type: DataTypes.DATE,
+    defaultValue: DataTypes.NOW
+  },
+  updated_at: {
+    type: DataTypes.DATE,
+    defaultValue: DataTypes.NOW
+  }
+}, {
+  sequelize,
+  modelName: 'Subscription',
+  tableName: 'Subscriptions',
+  timestamps: true,
+  createdAt: 'created_at',
+  updatedAt: 'updated_at'
+});
+
+// Associations
+Payment.belongsTo(RideBooking, { foreignKey: 'booking_id', as: 'booking' });
+RideBooking.hasMany(Payment, { foreignKey: 'booking_id', as: 'payments' });
+
+Subscription.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
+User.hasMany(Subscription, { foreignKey: 'user_id', as: 'subscriptions' });
+
 
 // Driver Ratings Model
 class DriverRating extends Model { }
@@ -736,14 +843,7 @@ RideBooking.belongsTo(Airport, {
   as: 'dropoff_airport'
 });
 
-RideBooking.hasMany(Payment, {
-  foreignKey: 'booking_id',
-  as: 'payments'
-});
-Payment.belongsTo(RideBooking, {
-  foreignKey: 'booking_id',
-  as: 'booking'
-});
+
 
 RideBooking.hasOne(DriverRating, {
   foreignKey: 'booking_id',
